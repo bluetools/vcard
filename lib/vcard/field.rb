@@ -1,12 +1,9 @@
-=begin
-  Copyright (C) 2008 Sam Roberts
+# Copyright (C) 2008 Sam Roberts
 
-  This library is free software; you can redistribute it and/or modify it
-  under the same terms as the ruby language itself, see the file COPYING for
-  details.
-=end
+# This library is free software; you can redistribute it and/or modify it
+# under the same terms as the ruby language itself.
 
-module Vpim
+module Vcard
 
   class DirectoryInfo
 
@@ -19,7 +16,7 @@ module Vpim
       #   pvalue_iset/idel/iadd, where set sets them all, add adds if not present,
       #   and del deletes any that are present
       # - I really, really, need a case-insensitive string...
-      # - should allow nil as a field value, its not the same as '', if there is
+      # - should allow nil as a field value, its not the same as "", if there is
       #   more than one pvalue, the empty string will show up. This isn't strictly
       #   disallowed, but its odd. Should also strip empty strings on decoding, if
       #   I don't already.
@@ -37,14 +34,18 @@ module Vpim
       end
 
       # Encode a field.
-      def Field.encode0(group, name, params={}, value='') # :nodoc:
+      def Field.encode0(group, name, params={}, value="") # :nodoc:
         line = ""
 
         # A reminder of the line format:
         #   [<group>.]<name>;<pname>=<pvalue>,<pvalue>:<value>
 
         if group
-          line << group << '.'
+          if group.class == Symbol
+            # Explicitly allow symbols
+            group = group.to_s
+          end
+          line << group.to_str << "."
         end
 
         line << name
@@ -55,15 +56,15 @@ module Vpim
             pvalues = [ pvalues ]
           end
 
-          line << ';' << pname << '='
+          line << ";" << pname << "="
 
-          sep = "" # set to ',' after one pvalue has been appended
+          sep = "" # set to "," after one pvalue has been appended
 
           pvalues.each do |pvalue|
             # check if we need to do any encoding
-            if pname.casecmp('ENCODING') == 0 && pvalue == :b64
-              pvalue = 'B' # the RFC definition of the base64 param value
-              value = [ value.to_str ].pack('m').gsub("\n", '')
+            if pname.casecmp("ENCODING") == 0 && pvalue == :b64
+              pvalue = "B" # the RFC definition of the base64 param value
+              value = [ value.to_str ].pack("m").gsub("\n", "")
             end
 
             line << sep << pvalue
@@ -71,7 +72,7 @@ module Vpim
           end
         end
 
-        line << ':'
+        line << ":"
 
         line << Field.value_str(value)
 
@@ -79,19 +80,19 @@ module Vpim
       end
 
       def Field.value_str(value) # :nodoc:
-        line = ''
+        line = ""
         case value
         when Date
-          line << Vpim.encode_date(value)
+          line << ::Vcard.encode_date(value)
 
         when Time #, DateTime
-          line << Vpim.encode_date_time(value)
+          line << ::Vcard.encode_date_time(value)
 
         when Array
-          line << value.map { |v| Field.value_str(v) }.join(';')
+          line << value.map { |v| Field.value_str(v) }.join(";")
 
         when Symbol
-          line << value
+          line << value.to_s
 
         else
           # FIXME - somewhere along here, values with special chars need escaping...
@@ -102,8 +103,8 @@ module Vpim
 
       # Decode a field.
       def Field.decode0(atline) # :nodoc:
-        unless atline =~ %r{#{Bnf::LINE}}i
-          raise Vpim::InvalidEncodingError, atline
+        if !(atline =~ Bnf::LINE)
+          raise ::Vcard::InvalidEncodingError, atline
         end
 
         atgroup = $1.upcase
@@ -117,7 +118,7 @@ module Vpim
         atvalue.strip!
 
         if atgroup.length > 0
-          atgroup.chomp!('.')
+          atgroup.chomp!(".")
         else
           atgroup = nil
         end
@@ -128,27 +129,27 @@ module Vpim
         if paramslist.size > 1
 
           # v3.0 and v2.1 params
-          paramslist.scan( %r{#{Bnf::PARAM}}i ) do
+          paramslist.scan( Bnf::PARAM ) do
 
             # param names are case-insensitive, and multi-valued
             name = $1.upcase
             params = $3
 
-            # v2.1 params have no '=' sign, figure out what kind of param it
-            # is (either its a known encoding, or we treat it as a 'TYPE'
+            # v2.1 params have no "=" sign, figure out what kind of param it
+            # is (either its a known encoding, or we treat it as a "TYPE"
             # param).
 
             if $2 == ""
               params = $1
               case $1
               when /quoted-printable/i
-                name = 'ENCODING'
+                name = "ENCODING"
 
               when /base64/i
-                name = 'ENCODING'
+                name = "ENCODING"
 
               else
-                name = 'TYPE'
+                name = "TYPE"
               end
             end
 
@@ -158,7 +159,7 @@ module Vpim
               atparams[name] = []
             end
 
-            params.scan( %r{#{Bnf::PVALUE}} ) do
+            params.scan( Bnf::PVALUE ) do
               atparams[name] << ($1 || $2)
             end
           end
@@ -188,16 +189,16 @@ module Vpim
       # name (a String) to either a single string or symbol, or an array of
       # strings and symbols (parameters can be multi-valued).
       #
-      # If 'ENCODING' => :b64 is specified as a parameter, the value will be
+      # If "ENCODING" => :b64 is specified as a parameter, the value will be
       # base-64 encoded. If it's already base-64 encoded, then use String
-      # values ('ENCODING' => 'B'), and no further encoding will be done by
+      # values ("ENCODING" => "B"), and no further encoding will be done by
       # this routine.
       #
       # Currently handled value types are:
       # - Time, encoded as a date-time value
       # - Date, encoded as a date value
       # - String, encoded directly
-      # - Array of String, concatentated with ';' between them.
+      # - Array of String, concatentated with ";" between them.
       #
       # TODO - need a way to encode String values as TEXT, at least optionally,
       # so as to escape special chars, etc.
@@ -206,7 +207,7 @@ module Vpim
 
         begin
           new(line)
-        rescue Vpim::InvalidEncodingError => e
+        rescue ::Vcard::InvalidEncodingError => e
           raise ArgumentError, e.to_s
         end
       end
@@ -236,7 +237,7 @@ module Vpim
           l = l.gsub(/.{#{width},#{width}}/) { |m| m + "\n " }
         end
         # Make sure it's terminated with no more than a single NL.
-        l.gsub(/\s*\z/, '') + "\n"
+        l.gsub(/\s*\z/, "") + "\n"
       end
 
       alias to_s encode
@@ -306,17 +307,17 @@ module Vpim
       #   if VALUE parameter is not present.
       def value
         case encoding
-        when nil, '8BIT', '7BIT' then @value
+        when nil, "8BIT", "7BIT" then @value
 
           # Hack - if the base64 lines started with 2 SPC chars, which is invalid,
           # there will be extra spaces in @value. Since no SPC chars show up in
           # b64 encodings, they can be safely stripped out before unpacking.
-        when 'B', 'BASE64'       then @value.gsub(' ', '').unpack('m*').first
+        when "B", "BASE64"       then @value.gsub(" ", "").unpack("m*").first
 
-        when 'QUOTED-PRINTABLE'  then @value.unpack('M*').first
+        when "QUOTED-PRINTABLE"  then @value.unpack("M*").first
 
         else
-          raise Vpim::InvalidEncodingError, "unrecognized encoding (#{encoding})"
+          raise ::Vcard::InvalidEncodingError, "unrecognized encoding (#{encoding})"
         end
       end
 
@@ -360,7 +361,7 @@ module Vpim
       def type?(type)
         type = type.to_str
 
-        types = param('TYPE')
+        types = param("TYPE")
 
         if types
           types = types.detect { |t| t.casecmp(type) == 0 }
@@ -368,18 +369,18 @@ module Vpim
       end
 
       # Is this field marked as preferred? A vCard field is preferred if
-      # #type?('PREF'). This method is not necessarily meaningful for
+      # #type?("PREF"). This method is not necessarily meaningful for
       # non-vCard profiles.
       def pref?
-        type? 'PREF'
+        type? "PREF"
       end
 
       # Set whether a field is marked as preferred. See #pref?
       def pref=(ispref)
         if ispref
-          pvalue_iadd('TYPE', 'PREF')
+          pvalue_iadd("TYPE", "PREF")
         else
-          pvalue_idel('TYPE', 'PREF')
+          pvalue_idel("TYPE", "PREF")
         end
       end
 
@@ -392,11 +393,11 @@ module Vpim
       # The value of the ENCODING parameter, if present, or nil if not
       # present.
       def encoding
-        e = param('ENCODING')
+        e = param("ENCODING")
 
         if e
           if e.length > 1
-            raise Vpim::InvalidEncodingError, "multi-valued param 'ENCODING' (#{e})"
+            raise ::Vcard::InvalidEncodingError, "multi-valued param 'ENCODING' (#{e})"
           end
           e = e.first.upcase
         end
@@ -406,10 +407,10 @@ module Vpim
       # The type of the value, as specified by the VALUE parameter, nil if
       # unspecified.
       def kind
-        v = param('VALUE')
+        v = param("VALUE")
         if v
           if v.size > 1
-            raise InvalidEncodingError, "multi-valued param 'VALUE' (#{values})"
+            raise ::Vcard::InvalidEncodingError, "multi-valued param 'VALUE' (#{values})"
           end
           v = v.first.downcase
         end
@@ -429,27 +430,25 @@ module Vpim
       # saying what the year is that breaks, so they at least know that
       # its ridiculous! I think I need my own DateTime variant.
       def to_time
-        begin
-          Vpim.decode_date_time_list(value).collect do |d|
-            # We get [ year, month, day, hour, min, sec, usec, tz ]
-            begin
-              if(d.pop == "Z")
-                Time.gm(*d)
-              else
-                Time.local(*d)
-              end
-            rescue ArgumentError => e
-              raise Vpim::InvalidEncodingError, "Time.gm(#{d.join(', ')}) failed with #{e.message}"
-            end
-          end
-        rescue Vpim::InvalidEncodingError
-          Vpim.decode_date_list(value).collect do |d|
-            # We get [ year, month, day ]
-            begin
+        ::Vcard.decode_date_time_list(value).collect do |d|
+          # We get [ year, month, day, hour, min, sec, usec, tz ]
+          begin
+            if(d.pop == "Z")
               Time.gm(*d)
-            rescue ArgumentError => e
-              raise Vpim::InvalidEncodingError, "Time.gm(#{d.join(', ')}) failed with #{e.message}"
+            else
+              Time.local(*d)
             end
+          rescue ArgumentError => e
+            raise ::Vcard::InvalidEncodingError, "Time.gm(#{d.join(', ')}) failed with #{e.message}"
+          end
+        end
+      rescue ::Vcard::InvalidEncodingError
+        ::Vcard.decode_date_list(value).collect do |d|
+          # We get [ year, month, day ]
+          begin
+            Time.gm(*d)
+          rescue ArgumentError => e
+            raise ::Vcard::InvalidEncodingError, "Time.gm(#{d.join(', ')}) failed with #{e.message}"
           end
         end
       end
@@ -462,16 +461,14 @@ module Vpim
       # decoding is tried first as a DATE-TIME, then as a DATE, if neither
       # works an InvalidEncodingError will be raised.
       def to_date
-        begin
-          Vpim.decode_date_time_list(value).collect do |d|
-            # We get [ year, month, day, hour, min, sec, usec, tz ]
-            Date.new(d[0], d[1], d[2])
-          end
-        rescue Vpim::InvalidEncodingError
-          Vpim.decode_date_list(value).collect do |d|
-            # We get [ year, month, day ]
-            Date.new(*d)
-          end
+        ::Vcard.decode_date_time_list(value).collect do |d|
+          # We get [ year, month, day, hour, min, sec, usec, tz ]
+          Date.new(d[0], d[1], d[2])
+        end
+      rescue ::Vcard::InvalidEncodingError
+        ::Vcard.decode_date_list(value).collect do |d|
+          # We get [ year, month, day ]
+          Date.new(*d)
         end
       end
 
@@ -479,11 +476,11 @@ module Vpim
       # characters, this method will strip them, if present.
       #
       # In theory, #value could also do this, but it would need to know that
-      # the value is of type 'TEXT', and often for text values the 'VALUE'
+      # the value is of type "TEXT", and often for text values the "VALUE"
       # parameter is not present, so knowledge of the expected type of the
       # field is required from the decoder.
       def to_text
-        Vpim.decode_text(value)
+        ::Vcard.decode_text(value)
       end
 
       # The undecoded value, see +value+.
@@ -516,10 +513,10 @@ module Vpim
       # currently has. See Field.create() for a description of +pvalue+.
       #
       # Example:
-      #  if field['TYPE']
-      #    field['TYPE'] << 'HOME'
+      #  if field["TYPE"]
+      #    field["TYPE"] << "HOME"
       #  else
-      #    field['TYPE'] = [ 'HOME' ]
+      #    field["TYPE"] = [ "HOME" ]
       #  end
       #
       # TODO - this could be an alias to #pvalue_set
@@ -593,14 +590,11 @@ module Vpim
       # new fields, not old fields.
       def mutate(g, n, p, v) #:nodoc:
         line = Field.encode0(g, n, p, v)
-
-        begin
-          @group, @name, @params, @value = Field.decode0(line)
-          @line = line
-        rescue Vpim::InvalidEncodingError => e
-          raise ArgumentError, e.to_s
-        end
+        @group, @name, @params, @value = Field.decode0(line)
+        @line = line
         self
+      rescue ::Vcard::InvalidEncodingError => e
+        raise ArgumentError, e.to_s
       end
 
       private :mutate
