@@ -496,4 +496,13 @@ EOF
     assert_equal("1234", card["X-LOTUS-CHILD_UID"])
     assert_equal([], card.groups)
   end
+
+  def test_whitespace_padding
+    card = nil
+    assert_nothing_thrown { card = Vcard::DirectoryInfo.decode(vcard(:whitespace_padding)) }
+    assert_equal_nospace(vcard(:whitespace_padding), card.to_s)
+
+    assert_equal("TestUser;Stepcase;;;", card["N"])
+    assert_equal([], card.groups)
+  end
 end
