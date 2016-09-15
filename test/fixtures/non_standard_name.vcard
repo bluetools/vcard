@@ -1,0 +1,6 @@
+BEGIN:VCARD
+f#oo/ba;r+test:something
+X-messaging/xmpp-All:some@jabber.id
+X-LOTUS-CHILD_UID:1234
+X-GOOGLE TALK:2345
+END:VCARD

@@ -12,7 +12,8 @@ module Vcard
     # Note: "_" allowed because produced by Notes  (X-LOTUS-CHILD_UID:)
     # Note: "/" allowed because produced by KAddressBook (X-messaging/xmpp-All:)
     # Note: " " allowed because produced by highrisehq.com (X-GOOGLE TALK:)
-    NAME    = /[\w\/-][ \w\/-]*/
+    NAME_WORD = /[\w-](?:[^\s.=;:,]*[\w-])?/
+    NAME    = /#{NAME_WORD}(?: #{NAME_WORD})*/
 
     # <"> <Any character except CTLs, DQUOTE> <">
     QSTR    = /"([^"]*)"/
