@@ -522,4 +522,25 @@ EOF
     card = Vcard::Vcard.decode(card.encode).first
     assert_equal "line1\n;line2", card.note
   end
+
+  def test_non_standard_name
+    card = nil
+    assert_nothing_thrown { card = Vcard::DirectoryInfo.decode(vcard(:non_standard_name)) }
+    assert_equal_nospace(vcard(:non_standard_name), card.to_s)
+
+    assert_equal("some@jabber.id", card["X-messaging/xmpp-All"])
+    assert_equal("2345", card["X-GOOGLE TALK"])
+    assert_equal("something", card["F#OO/BA"])
+    assert_equal("1234", card["X-LOTUS-CHILD_UID"])
+    assert_equal([], card.groups)
+  end
+
+  def test_whitespace_padding
+    card = nil
+    assert_nothing_thrown { card = Vcard::DirectoryInfo.decode(vcard(:whitespace_padding)) }
+    assert_equal_nospace(vcard(:whitespace_padding), card.to_s)
+
+    assert_equal("TestUser;Stepcase;;;", card["N"])
+    assert_equal([], card.groups)
+  end
 end
