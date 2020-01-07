@@ -169,10 +169,48 @@ EOF
   end
 
   def test_bad
-    # FIXME: this should THROW, it's badly encoded!
+    Vcard::configuration.raise_on_invalid_line = true
     assert_raises(::Vcard::InvalidEncodingError) do
       Vcard::Vcard.decode("BEGIN:VCARD\nVERSION:3.0\nKEYencoding=b:this could be \nmy certificate\n\nEND:VCARD\n")
     end
+  end
+
+  def test_not_raise_error_if_configured_to_ignore
+    Vcard::configuration.raise_on_invalid_line = false
+    Vcard::configuration.ignore_invalid_vcards = false
+    assert_nothing_raised do
+      Vcard::Vcard.decode("BEGIN:VCARD\nVERSION:3.0\nKEYencoding=b:this could be \nmy certificate\n\nEND:VCARD\n")
+    end
+  end
+
+  def test_ignore_vcards_with_invalid_fields
+    Vcard::configuration.raise_on_invalid_line = false
+    Vcard::configuration.ignore_invalid_vcards = true
+    src = <<'EOF'
+BEGIN:VCARD
+VERSION:3.0
+KEYencoding=b:this could be
+my certificate
+EMAIL:valid@field.value
+END:VCARD
+BEGIN:VCARD
+VERSION:3.0
+EMAIL:valid@field.value
+END:VCARD
+EOF
+
+    cards = Vcard::Vcard.decode(src)
+    assert_equal 1, cards.size
+  end
+
+  def test_ignore_only_invalid_fields
+    Vcard::configuration.raise_on_invalid_line = false
+    Vcard::configuration.ignore_invalid_vcards = false
+    email = 'test@example.com'
+    cards = Vcard::Vcard.decode("BEGIN:VCARD\nVERSION:3.0\nKEYencoding=b:this could be \nmy certificate\nEMAIL:#{email}\n\nEND:VCARD\n")
+    assert_equal email, cards.first.email
+    # [BEGIN, VERSION, EMAIL, END].size == 4
+    assert_equal 4, cards.first.fields.size
   end
 
   def test_create
@@ -318,7 +356,7 @@ EOF
     assert_equal('', card.name.given)
     assert_equal('', card.name.fullname)
 
-    assert_raises(TypeError, RuntimeError) do
+    assert_raises do
       card.name.given = 'given'
     end
 
@@ -466,7 +504,7 @@ EOF
       m.add_role "Office Manager\r\n;Something Else"
     end
     assert_equal "Office Manager\n;Something Else", card.role
-    assert_match %r{Office Manager\\n\\;Something Else}, card.to_s
+    assert_match(/Office Manager\\n\\;Something Else/, card.to_s)
     card = Vcard::Vcard.decode(card.encode).first
     assert_equal "Office Manager\n;Something Else", card.role
   end
@@ -480,29 +518,8 @@ EOF
       m.add_note "line1\r\n;line2"
     end
     assert_equal "line1\n;line2", card.note
-    assert_match %r{line1\\n\\;line2}, card.to_s
+    assert_match(/line1\\n\\;line2/, card.to_s)
     card = Vcard::Vcard.decode(card.encode).first
     assert_equal "line1\n;line2", card.note
-  end
-
-  def test_non_standard_name
-    card = nil
-    assert_nothing_thrown { card = Vcard::DirectoryInfo.decode(vcard(:non_standard_name)) }
-    assert_equal_nospace(vcard(:non_standard_name), card.to_s)
-
-    assert_equal("some@jabber.id", card["X-messaging/xmpp-All"])
-    assert_equal("2345", card["X-GOOGLE TALK"])
-    assert_equal("something", card["F#OO/BA"])
-    assert_equal("1234", card["X-LOTUS-CHILD_UID"])
-    assert_equal([], card.groups)
-  end
-
-  def test_whitespace_padding
-    card = nil
-    assert_nothing_thrown { card = Vcard::DirectoryInfo.decode(vcard(:whitespace_padding)) }
-    assert_equal_nospace(vcard(:whitespace_padding), card.to_s)
-
-    assert_equal("TestUser;Stepcase;;;", card["N"])
-    assert_equal([], card.groups)
   end
 end
